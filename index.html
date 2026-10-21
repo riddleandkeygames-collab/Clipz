@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Clips</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Clips">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; height: 100%; }
+body { margin: 0; overscroll-behavior: none; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shadows+Into+Light&family=Kalam:wght@300;400;700&family=Gloria+Hallelujah&family=Handlee&family=Coming+Soon&family=Architects+Daughter&display=swap">
+<style>
+/* Layout: a full-screen video viewer (top bar, picture, play button, scrubber). Deliberately single dark look. */
+:root {
+  --bg: #000;
+  --fg: #f5f5f7;
+  --dim: #a1a1a6;
+  --panel: #1c1c1e;
+  --line: #38383a;
+  --accent: #0a84ff;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Roboto, Arial, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--ui); overflow: hidden;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.viewer { position: fixed; inset: 0; background: var(--bg); }
+.viewer canvas, .viewer img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bar { position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 12px; pointer-events: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.top { top: 0; padding-top: calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom: 28px; background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0)); }
+.bottom { bottom: 0; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); padding-top: 36px; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.55)); flex-direction: column; align-items: stretch; gap: 8px; }
+.back { font-size: 30px; line-height: 1; color: var(--fg); width: 22px; }
+.titles { flex: 1; min-width: 0; text-align: center; padding-right: 22px; }
+.t1 { font-weight: 600; font-size: 16px; }
+.t2 { font-size: 12px; color: var(--dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.scrub { height: 3px; border-radius: 2px; background: rgba(255,255,255,.3); overflow: hidden; }
+.scrub i { display: block; height: 100%; width: 0; background: var(--fg); }
+.times { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.play { position: absolute; left: 50%; top: 50%; width: 72px; height: 72px; margin: -36px 0 0 -36px; border-radius: 50%;
+  background: rgba(30,30,30,.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); pointer-events: none;
+  display: flex; align-items: center; justify-content: center; }
+.play::before { content: ""; margin-left: 6px; border-left: 22px solid var(--fg); border-top: 14px solid transparent; border-bottom: 14px solid transparent; }
+.adjust { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; background: rgba(0,0,0,.72); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 14px) max(16px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 8px; font-size: 15px; max-height: 50vh; box-sizing: border-box; }
+.adj-row { display: grid; grid-template-columns: 92px 1fr 44px; align-items: center; gap: 10px; }
+.adj-row input { width: 100%; accent-color: var(--fg); }
+.adj-row output { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+.adj-btns { display: flex; gap: 10px; justify-content: flex-end; }
+.adj-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex: none; }
+.adj-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.seg { display: flex; background: var(--panel); border-radius: 9px; padding: 2px; }
+.seg button { flex: 1; border: 0; background: none; color: var(--dim); padding: 7px; border-radius: 7px; font: 600 14px var(--ui); cursor: pointer; }
+.seg button.on { background: #3a3a3c; color: var(--fg); }
+.adj-help { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.4; }
+.adj-check { display: grid; grid-template-columns: 22px 1fr; gap: 2px 10px; align-items: start; font-size: 14px; }
+.adj-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--fg); }
+.adj-check small { grid-column: 2; color: var(--dim); font-size: 12px; }
+.adj-row2 { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; color: var(--dim); }
+.handles { position: fixed; inset: 0; z-index: 20; touch-action: none; }
+.handles svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.handles polygon { fill: rgba(10,132,255,.12); stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; }
+.h { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; touch-action: none; cursor: grab; box-sizing: border-box; }
+.h.corner { background: rgba(10,132,255,.35); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.h.mover { background: rgba(0,0,0,.5); border: 2px solid #fff; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.filebtn { position: relative; overflow: hidden; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.note { font-size: 14px; color: var(--dim); }
+.adj-btns .primary { padding: 9px 22px; font-size: 15px; }
+.loading { position: absolute; left: 0; right: 0; top: 50%; text-align: center; color: var(--dim); font-size: 14px; margin-top: 50px; pointer-events: none; }
+
+/* Magician settings */
+.sheet { position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 28px) max(16px, env(safe-area-inset-left, 0px));
+  user-select: text; -webkit-user-select: text; }
+.sheet-inner { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; font-size: 16px; line-height: 1.45; }
+.sheet h1 { font-size: 26px; margin: 0; }
+.sheet h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 0 0 6px; font-weight: 600; }
+.sheet p { margin: 0; color: var(--dim); }
+.sheet ul, .sheet ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.srow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.srow label { flex: 1 1 180px; min-width: 0; }
+.srow small { color: var(--dim); }
+.srow select, .srow input[type=text] { font: 16px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-width: 100%; }
+.srow input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
+textarea { width: 100%; box-sizing: border-box; min-height: 260px; font: 15px/1.6 ui-monospace, Menlo, monospace; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.outs { display: flex; flex-direction: column; gap: 6px; }
+.out { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; }
+.out input:disabled { color: var(--dim); }
+.out .pic { padding: 8px 10px; font-size: 14px; }
+.out label { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.out input { font: 16px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.btn { font: 600 15px var(--ui); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+.btn.primary { background: var(--fg); color: #000; border-color: var(--fg); font-size: 17px; padding: 13px; }
+.setbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.effect { display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; }
+.effect select, .effect input[type=text] { background: #2c2c2e; }
+.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quick .btn { padding: 12px; line-height: 1.3; }
+.quick small { color: var(--dim); font-weight: 500; }
+.keypad { display: grid; grid-template-columns: repeat(3, 56px); gap: 4px; }
+.keypad span { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; text-align: center; padding: 8px 0; font-weight: 600; }
+.keypad .zero { grid-column: 1 / span 3; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="viewer" id="viewer">
+  <img id="poster" alt="">
+  <canvas id="cv"></canvas>
+  <div class="bar top">
+    <span class="back">‹</span>
+    <div class="titles"><div class="t1" id="t1">Today</div><div class="t2" id="t2">08:14 · 4.18 MB</div></div>
+  </div>
+  <div class="play" id="playBtn"></div>
+  <div class="loading" id="loading">Loading…</div>
+  <div class="bar bottom">
+    <div class="scrub"><i id="scrubFill"></i></div>
+    <div class="times"><span id="tNow">0:00</span><span id="tEnd">0:08</span></div>
+  </div>
+</div>
+
+<div class="handles" id="handles" hidden>
+  <svg id="quadLine" aria-hidden="true"><polygon id="quadPoly" points=""></polygon></svg>
+  <div class="h corner" data-i="0"></div><div class="h corner" data-i="1"></div><div class="h corner" data-i="2"></div><div class="h corner" data-i="3"></div>
+  <div class="h mover" data-i="move">✥</div>
+</div>
+
+<div class="adjust" id="adjust" hidden>
+  <div class="adj-head"><b>Placement</b><span class="adj-btns"><button class="btn" id="adjFold">Hide controls</button><button class="btn primary" id="adjDone">Done</button></span></div>
+  <div class="adj-body" id="adjBody">
+    <p class="adj-help">Drag the corners onto the surface, or ✥ to move it. Hide controls to see the whole picture.</p>
+    <div class="adj-row"><label for="adjTime">Frame</label><input type="range" id="adjTime" min="0" max="1000" step="1"><output id="adjTimeV"></output></div>
+    <div class="seg" id="adjMode" role="group" aria-label="What to adjust"><button data-m="text" class="on">Writing</button><button data-m="pic">Picture</button></div>
+    <p class="adj-help" id="picNote" hidden>No picture outs yet. Add a picture to an out in settings first.</p>
+    <div class="adj-row"><label for="adjSize">Size</label><input type="range" id="adjSize" min="30" max="160" step="1"><output id="adjSizeV"></output></div>
+    <div class="adj-row"><label for="adjX">Left / right</label><input type="range" id="adjX" min="-45" max="45" step="1"><output id="adjXV"></output></div>
+    <div class="adj-row"><label for="adjY">Up / down</label><input type="range" id="adjY" min="-45" max="45" step="1"><output id="adjYV"></output></div>
+    <div class="adj-row" id="rotRow" hidden><label for="adjRot">Tilt</label><input type="range" id="adjRot" min="-25" max="25" step="1"><output id="adjRotV"></output></div>
+    <div class="adj-row"><label for="adjOp">Opacity</label><input type="range" id="adjOp" min="20" max="100" step="1"><output id="adjOpV"></output></div>
+    <label class="adj-check"><input type="checkbox" id="adjMask"> Hide the writing behind anything darker than the surface<small>For light surfaces: a cover or hand in front hides it. Turn on while the surface is clear.</small></label>
+    <div class="adj-row2"><span id="adjFromV">Writing shows from the start</span><button class="btn" id="adjFrom">Show from this frame</button></div>
+    <div class="adj-row2"><span>Start again with the writing in the middle</span><button class="btn" id="adjReset">Reset</button></div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-inner">
+    <h1>Magician settings</h1>
+
+    <div class="effect">
+      <div class="srow" style="padding-top:0"><label for="setSel"><b>Effect</b><br><small>Each effect remembers its own outs and pictures, video, handwriting, ink colour, and the size and position of the writing and pictures.</small></label>
+        <select id="setSel"></select></div>
+      <div class="srow"><label for="setName">Name of this effect</label><input type="text" id="setName" autocomplete="off"></div>
+      <div class="setbtns"><button class="btn" id="setNew">New effect</button><button class="btn" id="setCopy">Copy effect</button><button class="btn" id="setDel">Delete effect</button></div>
+      <p class="note" id="setMsg" hidden></p>
+    </div>
+
+    <div class="quick">
+      <button class="btn" id="placeText">Size and position<br><small>of the writing</small></button>
+      <button class="btn" id="placePic">Size and position<br><small>of pictures</small></button>
+    </div>
+
+    <div>
+      <h2>Secret keypad</h2>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div class="keypad" aria-label="Keypad layout"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="zero">0</span></div>
+        <p style="flex:1 1 200px">The whole screen is split into four rows of equal height. The bottom row is all 0. Only where you tap for a digit matters; the tap that starts the video can be anywhere.</p>
+      </div>
+    </div>
+
+    <div>
+      <h2>Controls</h2>
+      <ul>
+        <li><b>Play, pause, play</b> (the usual way): tap anywhere to play the video. Tap again to pause it: <b>where</b> you tap is the first digit. Tap to play it again: where you tap is the second digit, and the writing is set. To anyone watching, you just paused the video for a moment.</li>
+        <li><b>Do the pause before the reveal.</b> If the writing would already be showing when you pause, choose “Start again from the beginning” below, so nobody sees it appear.</li>
+        <li><b>Digits first</b> (the other way): tap two digits on the still picture, then the next tap anywhere plays.</li>
+        <li><b>Confirmation:</b> once both digits are in, the file size under the date changes to <b>4.NN MB</b>, where NN is the out. 4.07 MB means out 07.</li>
+        <li><b>Swipe left or right:</b> clears the digits and goes back to the start. Use it if you mistype.</li>
+        <li><b>Hold anywhere (1.5 seconds):</b> opens this screen.</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2>Video</h2>
+      <div class="srow"><label for="cfgScene">Video</label>
+        <select id="cfgScene"></select></div>
+      <div class="srow"><label>Place the writing on this video<br><small>Drag it to any part of the picture, set its size and opacity, and choose when it appears.</small></label>
+        <button class="btn" id="adjBtn">Place</button></div>
+      <div class="srow"><label>Add your own video<br><small>Choose a video from your phone. It's kept on this phone only.</small></label>
+        <span class="btn filebtn">Choose video<input type="file" id="upFile" accept="video/*"></span></div>
+      <div class="note" id="upNote" hidden></div>
+      <div class="srow" id="delRow" hidden><label>Remove this video from the app</label><button class="btn" id="delBtn">Delete</button></div>
+      <div class="srow"><label for="cfgFont">Handwriting</label>
+        <select id="cfgFont">
+          <option value="shadows">Quick handwriting</option>
+          <option value="kalam3">Neat handwriting</option>
+          <option value="gloria">Loose handwriting</option>
+          <option value="handlee">Rounded handwriting</option>
+          <option value="coming">Felt tip</option>
+          <option value="architect">Print capitals and lower case</option>
+          <option value="kalam4">Medium marker</option>
+          <option value="kalam">Bold marker</option>
+        </select></div>
+      <div class="srow"><label for="cfgInk">Ink colour</label>
+        <select id="cfgInk">
+          <option value="black">Black</option>
+          <option value="navy">Dark blue</option>
+          <option value="red">Red</option>
+          <option value="green">Green</option>
+          <option value="white">White (chalk, dark surfaces)</option>
+        </select></div>
+      <div class="srow"><label for="cfgRed">Red marker for hearts and diamonds</label><input type="checkbox" id="cfgRed"></div>
+      <div class="srow"><label for="cfgEntry">How you tap in the out</label>
+        <select id="cfgEntry">
+          <option value="pause">Play, pause, play</option>
+          <option value="first">Digits first, then play</option>
+        </select></div>
+      <div class="srow"><label for="cfgResume">After the second digit</label>
+        <select id="cfgResume">
+          <option value="carry">Carry on from the pause</option>
+          <option value="start">Start again from the beginning</option>
+        </select></div>
+      <div class="srow"><label for="cfgPeek">Show the confirmation in the file size</label><input type="checkbox" id="cfgPeek"></div>
+    </div>
+
+    <div>
+      <h2>Filming your own video</h2>
+      <ul>
+        <li>Use a tripod or prop the phone up. The writing stays fixed in the picture, so the camera must not move.</li>
+        <li>Film a surface that can be written on: a whiteboard, paper, a sign, a sticky note. Keep it flat, still and evenly lit.</li>
+        <li>For a reveal, cover the surface at the start and uncover it on camera. When you place the writing, turn on “Hide the writing behind anything darker”.</li>
+        <li>Film in portrait, like the built-in videos; anything outside the phone's screen shape is cropped. 10 to 20 seconds is plenty.</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2>Outs</h2>
+      <p style="margin:0 0 10px">These belong to the effect chosen at the top. What gets written for each number you tap. Use | to start a new line on the board, e.g. <code>Queen|of Hearts</code>. A blank box writes the number itself. Out 00 leaves the board blank. <b>Picture</b> puts an image on the surface instead of writing, such as a photo of a playing card; a PNG with a see-through background works best. Out 60 has an example.</p>
+      <div class="outs" id="outsList"></div>
+      <input type="file" id="picFile" accept="image/*" hidden>
+      <div class="srow" style="border-bottom:0"><label>Put the 52 cards back in boxes 01 to 52<br><small>Clubs, Hearts, Spades, Diamonds, each Ace to King.</small></label><button class="btn" id="cardsBtn">Reset cards</button></div>
+    </div>
+
+    <div>
+      <h2>Try an out</h2>
+      <div class="srow" style="border-bottom:0"><label for="tryNum">Out number</label>
+        <input id="tryNum" type="text" inputmode="numeric" maxlength="2" style="width:70px" placeholder="07">
+        <button class="btn" id="tryBtn">Play it</button></div>
+    </div>
+
+    <div class="srow" style="border-bottom:0"><label>Version 16</label></div>
+    <button class="btn primary" id="close">Done</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+
+  // Built-in videos. quad is the writing surface (the board's inner white area) in the video's own pixels:
+  // top-left, top-right, bottom-right, bottom-left.
+  const SCENES = {
+    cloth: { name: 'Black cloth lifted off a whiteboard', src: 'cloth.mp4', poster: 'cloth.jpg', w: 1080, h: 1920, quad: [[315, 615], [952.5, 603], [922.5, 1342.5], [237, 1287]] },
+    towel: { name: 'Grey tea towel lifted off a whiteboard', src: 'towel.mp4', poster: 'towel.jpg', w: 720, h: 1280, quad: [[220, 408], [618, 415], [613, 892], [172, 865]] },
+    board: { name: 'Whiteboard only', src: 'board.mp4', poster: 'board.jpg', w: 1080, h: 1920, quad: [[327, 618], [967.5, 612], [933, 1347], [273, 1293]] }
+  };
+  const VALUES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
+  const SUITS = ['Clubs', 'Hearts', 'Spades', 'Diamonds'];
+  const CARDS = SUITS.flatMap(s => VALUES.map(v => v + '|of ' + s));
+
+  // ---- settings ----
+  // Each video keeps its own placement: corners, size, offset, opacity, when the writing appears, and masking.
+  const PLACE = { tsize: 1, tx: 0, ty: 0, psize: 1, px: 0, py: 0, prot: -3, op: 1, from: 0 };
+  const DEF = { entry: 'pause', resume: 'carry', scene: 'cloth', font: 'shadows', ink: 'black', red: false, peek: true, v: 16, scenes: {}, uploads: [], set: 'cards', sets: null };
+  let cfg = Object.assign({}, DEF);
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('clips-cfg') || '{}')); } catch (e) {}
+  if ((cfg.v || 1) < 3) { cfg.ink = 'black'; cfg.red = false; cfg.scene = 'cloth'; cfg.v = 3; }   // version 3: black writing, black cloth
+  if (cfg.v < 5) { cfg.font = 'shadows'; cfg.v = 5; }   // version 5: lighter handwriting
+  if (cfg.v < 7) {   // version 7: placement moved from one global setting to each video
+    const old = { tsize: cfg.tsize ?? 1, tx: cfg.tx ?? 0, ty: cfg.ty ?? 0, op: cfg.op ?? 1 };
+    Object.keys(SCENES).forEach(id => { cfg.scenes[id] = Object.assign({}, old); });
+    ['tsize', 'tx', 'ty', 'op'].forEach(k => delete cfg[k]); cfg.v = 7;
+  }
+  if (cfg.v < 10) { cfg.pics = Object.assign({ '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } }, cfg.pics || {}); cfg.v = 10; }   // version 10: picture outs, with an example in 60
+  // Sets of outs ("effects"): each has its own 99 boxes and pictures. The chosen one is used when performing.
+  function lines(map) { const a = new Array(99).fill(''); Object.entries(map).forEach(([k, v]) => { a[+k - 1] = v; }); return a.join('\n').replace(/\n+$/, ''); }
+  const at = (start, list) => Object.fromEntries(list.map((v, i) => [start + i, v]));
+  const EVERYDAY = lines(Object.assign(
+    at(1, ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Black']),
+    at(11, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']),
+    at(21, ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']),
+    at(41, ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']),
+    at(61, ['Circle', 'Cross', 'Wavy|lines', 'Square', 'Star']),
+    at(71, ['Rose', 'Carrot', 'Chair', '7', '37']),
+    at(81, ['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney'])));
+  // Ready-made effects. Symbols are drawings that are inked onto the surface like writing.
+  const SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
+  const ESP = ['Circle', 'Cross', 'Wavy|lines', 'Square', 'Star'], ESP_FILES = ['circle', 'cross', 'waves', 'square', 'star'];
+  const drawn = (names, files) => Object.fromEntries(names.map((n, i) => [String(i + 1).padStart(2, '0'), { name: n.replace('|', ' ') + ' (drawn)', src: 'sym/' + files[i] + '.png', ink: true }]));
+  const list = a => lines(at(1, a));
+  const COMMON = ['Rose', 'Carrot', 'Chair', '7', '37', 'Red', 'Paris', 'Dog', 'Hammer', 'Apple'];
+  const READY = [
+    { id: 'colours', name: 'Colours', outs: list(['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Black', 'White', 'Brown', 'Grey', 'Gold']), pics: {} },
+    { id: 'days', name: 'Days of the week', outs: list(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']), pics: {} },
+    { id: 'months', name: 'Months', outs: list(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']), pics: {} },
+    { id: 'signs', name: 'Star signs', outs: list(SIGNS), pics: {} },
+    { id: 'signsyms', name: 'Star sign symbols', outs: list(SIGNS), pics: drawn(SIGNS.map(x => x + ' symbol'), SIGNS.map(x => x.toLowerCase())) },
+    { id: 'esp', name: 'ESP symbols', outs: list(ESP), pics: drawn(ESP, ESP_FILES) },
+    { id: 'forces', name: 'Common choices', outs: list(COMMON), pics: {} },
+    { id: 'doodles', name: 'Common choices (doodles)', outs: list(COMMON), pics: Object.fromEntries([[1, 'rose'], [2, 'carrot'], [3, 'chair'], [7, 'eiffel'], [8, 'dog'], [9, 'hammer'], [10, 'apple']]
+      .map(([n, f]) => [String(n).padStart(2, '0'), { name: (f === 'eiffel' ? 'Eiffel Tower' : f[0].toUpperCase() + f.slice(1)) + ' (doodle)', src: 'doodle/' + f + '.png', ink: true }])) },
+    { id: 'cities', name: 'Cities', outs: list(['Paris', 'London', 'New York', 'Rome', 'Tokyo', 'Sydney', 'Barcelona', 'Dubai', 'Las Vegas', 'Amsterdam']), pics: {} }
+  ];
+  const startSets = (outs, pics) => [
+    { id: 'cards', name: 'Playing cards', outs, pics },
+    { id: 'numbers', name: 'Numbers 1 to 99', outs: '', pics: {} }
+  ].concat(JSON.parse(JSON.stringify(READY)));
+  if (cfg.v < 12) {   // version 12: outs and pictures moved into sets
+    cfg.sets = startSets(cfg.outs || CARDS.join('\n'), cfg.pics || {}); cfg.set = 'cards';
+    delete cfg.outs; delete cfg.pics; cfg.v = 12;
+  }
+  if (!cfg.sets) cfg.sets = startSets(CARDS.join('\n'), { '60': { name: '7 of Hearts card (example)', src: 'card-7h.png' } });   // a fresh install
+  // An effect also remembers its look: video, handwriting, ink, and the size and position of writing and pictures on each video.
+  // (The surface corners, masking and start time belong to the video, so they're shared by every effect.)
+  const STYLE = ['scene', 'font', 'ink', 'red'];
+  const EFFECT_PLACE = ['tsize', 'tx', 'ty', 'psize', 'px', 'py', 'prot', 'op'];
+  if (cfg.v < 13) {   // version 13: effects remember their style and placement
+    const place = {};
+    Object.entries(cfg.scenes).forEach(([id, sc]) => { place[id] = {}; EFFECT_PLACE.forEach(k => { if (k in sc) place[id][k] = sc[k]; }); });
+    cfg.sets.forEach(x => { STYLE.forEach(k => { x[k] = cfg[k]; }); x.place = JSON.parse(JSON.stringify(place)); });
+    cfg.v = 13;
+  }
+  if (cfg.v < 16) {   // versions 15-16: separate ready-made effects, added after any you already have
+    const look = cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
+    READY.forEach(r => { if (!cfg.sets.some(x => x.id === r.id)) cfg.sets.push(Object.assign(JSON.parse(JSON.stringify(r)), { place: JSON.parse(JSON.stringify(look.place || {})) }, Object.fromEntries(STYLE.map(k => [k, look[k] ?? cfg[k]])))); });
+    cfg.v = 16;
+  }
+  cfg.sets.forEach(x => { STYLE.forEach(k => { if (x[k] === undefined) x[k] = cfg[k]; }); x.place = x.place || {}; });
+  const set = () => cfg.sets.find(x => x.id === cfg.set) || cfg.sets[0];
+  STYLE.forEach(k => { cfg[k] = set()[k]; });
+  const save = () => { try { localStorage.setItem('clips-cfg', JSON.stringify(cfg)); } catch (e) {} };
+  save();
+  const outText = n => {
+    if (n === 0) return '';
+    const line = (set().outs.split('\n')[n - 1] || '').trim();
+    return line || String(n);
+  };
+
+  // ---- your own videos, kept in the phone's browser storage ----
+  const idb = (mode, fn) => new Promise((ok, bad) => {
+    const rq = indexedDB.open('clips', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('videos');
+    rq.onerror = () => bad(rq.error);
+    rq.onsuccess = () => { const tx = rq.result.transaction('videos', mode), r = fn(tx.objectStore('videos')); tx.oncomplete = () => ok(r && r.result); tx.onerror = () => bad(tx.error); };
+  });
+  const upload = id => cfg.uploads.find(u => u.id === id);
+  function defaultQuad(w, h) { return [[w * 0.2, h * 0.3], [w * 0.8, h * 0.3], [w * 0.8, h * 0.46], [w * 0.2, h * 0.46]]; }
+  function sceneOf(id) {
+    const b = SCENES[id] || upload(id) || SCENES.cloth, key = SCENES[id] || upload(id) ? id : 'cloth';
+    const own = cfg.scenes[key] || (cfg.scenes[key] = {});
+    const base = { quad: b.quad || defaultQuad(b.w, b.h), mask: !!SCENES[key], ref: [0.82, 0.03] };
+    const eff = set().place[key] || (set().place[key] = {});
+    return Object.assign({ id: key, builtIn: !!SCENES[key], name: b.name, w: b.w, h: b.h, src: b.src, poster: b.poster }, base, PLACE, own, eff, { own, eff });
+  }
+
+  // ---- maths: homography taking video pixels to surface coordinates (0..1), and back ----
+  function solve(A, b) {
+    const n = b.length;
+    for (let i = 0; i < n; i++) {
+      let p = i; for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+      [A[i], A[p]] = [A[p], A[i]]; [b[i], b[p]] = [b[p], b[i]];
+      for (let r = i + 1; r < n; r++) { const f = A[r][i] / A[i][i]; for (let c = i; c < n; c++) A[r][c] -= f * A[i][c]; b[r] -= f * b[i]; }
+    }
+    const x = new Array(n);
+    for (let i = n - 1; i >= 0; i--) { let s = b[i]; for (let c = i + 1; c < n; c++) s -= A[i][c] * x[c]; x[i] = s / A[i][i]; }
+    return x;
+  }
+  function homography(from, to) {   // 3x3, row-major, maps from[i] -> to[i]
+    const A = [], b = [];
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = from[i], [u, v] = to[i];
+      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+      A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+    }
+    return solve(A, b).concat(1);
+  }
+  const UNIT = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const apply = (h, x, y) => { const z = h[6] * x + h[7] * y + h[8]; return [(h[0] * x + h[1] * y + h[2]) / z, (h[3] * x + h[4] * y + h[5]) / z]; };
+
+  // ---- the writing, drawn flat, then mapped onto the surface by the shader ----
+  const ink = document.createElement('canvas');
+  function surfaceSize(q) {
+    const w = (Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) + Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1])) / 2;
+    const h = (Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) + Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1])) / 2;
+    return { w: Math.max(w, 8), h: Math.max(h, 8) };
+  }
+  // Handwriting faces. Each letter is drawn on its own with a little wobble, so no two look stamped from a font.
+  const FONTS = {
+    shadows: ['400', 'Shadows Into Light'], kalam3: ['300', 'Kalam'], gloria: ['400', 'Gloria Hallelujah'], handlee: ['400', 'Handlee'],
+    coming: ['400', 'Coming Soon'], architect: ['400', 'Architects Daughter'], kalam4: ['400', 'Kalam'], kalam: ['700', 'Kalam']
+  };
+  const fontOf = px => { const [wt, fam] = FONTS[cfg.font] || FONTS.shadows; return wt + ' ' + px + 'px "' + fam + '", "Marker Felt", cursive'; };
+  function rng(seed) {   // same out, same handwriting, every time
+    return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+  function drawInk(text) {
+    const { w, h } = surfaceSize(scene.quad);
+    // A little under one texel per video pixel, so the writing comes out as soft as the footage.
+    ink.width = Math.round(w * 0.8); ink.height = Math.round(h * 0.8);
+    const c = ink.getContext('2d');
+    c.clearRect(0, 0, ink.width, ink.height);
+    const lines = text.split('|').map(s => s.trim()).filter(Boolean);
+    if (!lines.length) return;
+    let seed = 7; for (const ch of text + cfg.font) seed = Math.imul(seed, 31) + ch.charCodeAt(0) | 0;
+    const r = rng(seed), j = k => (r() - 0.5) * k;
+    // Plan every letter: its own size, tilt and height on the line.
+    const plan = lines.map(l => ({ slope: j(0.06) - 0.02, shift: j(0.12), chars: [...l].map(ch => ({ ch, sc: 1 + j(0.1), rot: j(0.09), dy: j(0.06), gap: j(0.05) })) }));
+    const lineW = (L, px) => { c.font = fontOf(px); return L.chars.reduce((t, k) => t + c.measureText(k.ch).width * k.sc * (1 + k.gap), 0); };
+    let size = ink.height * 0.42;
+    while (size > 4 && (plan.some(L => lineW(L, size) > ink.width * 0.8) || lines.length * size * 1.2 > ink.height * 0.72)) size *= 0.95;
+    size *= scene.tsize;   // your size and position adjustments
+    const cx = ink.width * (0.5 + scene.tx), cy = ink.height * (0.5 + scene.ty);
+    c.font = fontOf(size); c.textBaseline = 'middle'; c.lineJoin = 'round';
+    const lh = size * 1.2, y0 = cy - (lines.length - 1) * lh / 2;
+    plan.forEach((L, i) => {
+      const lw = lineW(L, size); c.font = fontOf(size);
+      c.save(); c.translate(cx + L.shift * size, y0 + i * lh); c.rotate(L.slope);
+      let x = -lw / 2;
+      for (const k of L.chars) {
+        const adv = c.measureText(k.ch).width * k.sc;
+        c.save(); c.translate(x + adv / 2, k.dy * size); c.rotate(k.rot); c.scale(k.sc, k.sc);
+        // Ink sits a touch thinner in the middle of a stroke and pools at its edges.
+        c.fillStyle = 'rgba(255,255,255,0.93)'; c.textAlign = 'center'; c.fillText(k.ch, 0, 0);
+        c.strokeStyle = 'rgba(255,255,255,1)'; c.lineWidth = size * 0.012; c.strokeText(k.ch, 0, 0);
+        c.restore();
+        x += adv * (1 + k.gap);
+      }
+      c.restore();
+    });
+  }
+  const INK = { navy: [0.13, 0.18, 0.38], black: [0.12, 0.12, 0.14], red: [0.72, 0.13, 0.15], green: [0.12, 0.42, 0.22], white: [0.94, 0.94, 0.92] };
+  const inkColour = text => (cfg.red && /hearts|diamonds/i.test(text)) ? INK.red : INK[cfg.ink] || INK.black;
+
+  // ---- WebGL: draw each video frame with the writing added on the surface ----
+  const cv = $('cv');
+  const gl = cv.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: false });
+  let prog, texV, texI, U = {};
+  function shader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; }
+  function initGL() {
+    prog = gl.createProgram();
+    gl.attachShader(prog, shader(gl.VERTEX_SHADER, 'attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; uv.y = 1.0 - uv.y; gl_Position = vec4(p, 0.0, 1.0); }'));
+    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, [
+      'precision highp float;',
+      'varying vec2 uv; uniform sampler2D vid; uniform sampler2D txt; uniform mat3 H; uniform vec2 size; uniform vec3 inkC;',
+      'uniform float on; uniform float tm; uniform float useMask; uniform vec2 ref; uniform float light; uniform float mode;',
+      'float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
+      'float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+      '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }',
+      'void main(){',
+      '  vec3 c = texture2D(vid, uv).rgb;',
+      '  vec3 b = H * vec3(uv * size, 1.0); vec2 bu = b.xy / b.z;',
+      '  float a = 0.0;',
+      '  vec4 im = vec4(0.0);',
+      '  if (b.z > 0.0 && bu.x > 0.0 && bu.x < 1.0 && bu.y > 0.0 && bu.y < 1.0) { im = texture2D(txt, bu); a = im.a; }',
+      '  float lum = dot(c, vec3(0.299, 0.587, 0.114));',
+      '  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));',
+      // Optional mask: only where the pixel looks like the surface (about as bright, no more colourful), so a cover or a hand hides the writing.
+      '  float m = mix(1.0, smoothstep(ref.x - 0.27, ref.x - 0.12, lum) * (1.0 - smoothstep(ref.y + 0.06, ref.y + 0.16, sat)), useMask);',
+      // Real ink is patchy, a little grainy like the rest of the footage, and a shiny surface's highlights sit on top of it.
+      // A picture keeps its own colours but takes on the light falling on the surface beneath it, and the footage's grain.
+      '  if (mode > 0.5) {',
+      '    float lit = clamp(lum / max(ref.x, 0.2), 0.55, 1.1) * (0.97 + 0.06 * hash(floor(uv * size) + floor(tm * 24.0)));',
+      '    gl_FragColor = vec4(mix(c, im.rgb * lit, a * m * on), 1.0); return;',
+      '  }',
+      '  float patch = 0.9 + 0.1 * vnoise(bu * 22.0);',
+      '  float grain = 0.94 + 0.12 * hash(floor(uv * size) + floor(tm * 24.0));',
+      '  float shine = 1.0 - 0.5 * smoothstep(ref.x + 0.08, ref.x + 0.16, lum) * (1.0 - light);',
+      '  a *= m * patch * grain * shine * on * 0.95;',
+      '  vec3 dark = c * inkC * 1.15, chalk = mix(inkC, c, 0.15);',
+      '  gl_FragColor = vec4(mix(c, mix(dark, chalk, light), a), 1.0);',
+      '}'].join('\n')));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const mk = unit => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+      [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+      [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR)); return t; };
+    texV = mk(0); texI = mk(1);
+    gl.uniform1i(gl.getUniformLocation(prog, 'vid'), 0); gl.uniform1i(gl.getUniformLocation(prog, 'txt'), 1);
+    ['H', 'size', 'inkC', 'on', 'tm', 'useMask', 'ref', 'light', 'mode'].forEach(n => { U[n] = gl.getUniformLocation(prog, n); });
+  }
+  function setScene() {
+    if (cv.width !== scene.w || cv.height !== scene.h) { cv.width = scene.w; cv.height = scene.h; }
+    gl.viewport(0, 0, scene.w, scene.h);
+    const h = homography(scene.quad, UNIT);
+    // GLSL wants column-major.
+    gl.uniformMatrix3fv(U.H, false, new Float32Array([h[0], h[3], h[6], h[1], h[4], h[7], h[2], h[5], h[8]]));
+    gl.uniform2f(U.size, scene.w, scene.h);
+    gl.uniform1f(U.useMask, scene.mask ? 1 : 0); gl.uniform2f(U.ref, scene.ref[0], scene.ref[1]);
+  }
+  // ---- picture outs: an image placed on the surface instead of writing ----
+  const picImgs = {};   // '60' -> loaded image
+  const nn = n => String(n).padStart(2, '0');
+  function loadPic(k) {
+    const p = set().pics[k]; if (!p) return;
+    const img = new Image();
+    img.onload = () => { picImgs[k] = img; };
+    if (p.src) img.src = p.src;
+    else idb('readonly', st => st.get(p.key || 'pic:' + k)).then(b => { if (b) img.src = URL.createObjectURL(b); }).catch(() => {});
+  }
+  function drawPic(img) {
+    const { w, h } = surfaceSize(scene.quad);
+    ink.width = Math.round(w * 0.8); ink.height = Math.round(h * 0.8);
+    const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height);
+    // About half the surface's height, like a card stuck on a board, then the picture's own size, position and tilt.
+    let ph = ink.height * 0.55 * scene.psize, pw = ph * img.width / img.height;
+    if (pw > ink.width * 0.85 * scene.psize) { pw = ink.width * 0.85 * scene.psize; ph = pw * img.height / img.width; }
+    c.save(); c.translate(ink.width * (0.5 + scene.px), ink.height * (0.5 + scene.py)); c.rotate(scene.prot * Math.PI / 180);
+    c.shadowColor = 'rgba(0,0,0,0.35)'; c.shadowBlur = ph * 0.03; c.shadowOffsetX = ph * 0.012; c.shadowOffsetY = ph * 0.02;
+    c.drawImage(img, -pw / 2, -ph / 2, pw, ph);
+    c.restore();
+  }
+  // A drawing (a symbol) is inked like writing: its shape only, in the marker colour, with the writing's size and position.
+  function drawInkPic(img) {
+    const { w, h } = surfaceSize(scene.quad);
+    ink.width = Math.round(w * 0.8); ink.height = Math.round(h * 0.8);
+    const c = ink.getContext('2d'); c.clearRect(0, 0, ink.width, ink.height);
+    let ph = ink.height * 0.62 * scene.tsize, pw = ph * img.width / img.height;
+    if (pw > ink.width * 0.8 * scene.tsize) { pw = ink.width * 0.8 * scene.tsize; ph = pw * img.height / img.width; }
+    c.save(); c.translate(ink.width * (0.5 + scene.tx), ink.height * (0.5 + scene.ty)); c.rotate(-0.03);
+    c.drawImage(img, -pw / 2, -ph / 2, pw, ph); c.restore();
+  }
+  const isDrawing = k => !!(set().pics[k] && set().pics[k].ink);
+  // Draws out n (or nothing, for null) and hands it to the shader.
+  function uploadOut(n) {
+    const k = n === null ? '' : nn(n), img = k && set().pics[k] && picImgs[k], drawing = img && isDrawing(k), pic = img && !drawing;
+    const text = n === null || img ? '' : outText(n);
+    if (pic) drawPic(img); else if (drawing) drawInkPic(img); else drawInk(text);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texI);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ink);
+    gl.uniform1f(U.mode, pic ? 1 : 0);
+    gl.uniform3fv(U.inkC, inkColour(text));
+    gl.uniform1f(U.light, cfg.ink === 'white' && !(cfg.red && /hearts|diamonds/i.test(text)) ? 1 : 0);
+  }
+  // How strongly the writing shows at time t: your opacity, faded in quickly if it starts part-way through.
+  const onAt = t => scene.op * (scene.from > 0 ? Math.min(1, Math.max(0, (t - scene.from) / 0.2)) : 1);
+
+  // ---- video ----
+  let scene = sceneOf(cfg.scene);
+  const video = document.createElement('video');
+  video.playsInline = true; video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', ''); video.preload = 'auto';
+  let ready = false, playing = false, urls = [];
+  async function loadScene() {
+    scene = sceneOf(cfg.scene);
+    ready = false; $('loading').hidden = false; cv.hidden = true;
+    urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+    $('t2').textContent = stamp();
+    setScene();
+    try {
+      let vblob, poster;
+      if (scene.builtIn) {
+        // Loaded whole into memory, so it plays offline and phones don't need to stream it in parts.
+        vblob = await (await fetch(scene.src)).blob(); poster = scene.poster;
+      } else {
+        const rec = await idb('readonly', st => st.get(scene.id));
+        if (!rec) throw new Error('missing');
+        vblob = rec.video; poster = URL.createObjectURL(rec.poster); urls.push(poster);
+      }
+      const vu = URL.createObjectURL(vblob); urls.push(vu);
+      $('poster').src = poster; $('poster').hidden = false;
+      video.src = vu; video.load();
+    } catch (e) {
+      if (!scene.builtIn) { cfg.scene = 'cloth'; save(); return loadScene(); }   // a video that has gone from this phone
+      $('poster').src = scene.poster; video.src = scene.src;
+    }
+    video.addEventListener('loadedmetadata', () => { $('tEnd').textContent = fmt(video.duration); }, { once: true });
+    ready = true; $('loading').hidden = true;
+  }
+  const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  function frame() {
+    if (video.readyState >= 2) {
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texV);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+      gl.uniform1f(U.tm, video.currentTime); gl.uniform1f(U.on, state === 'place' ? scene.op : onAt(video.currentTime));
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (cv.hidden) { cv.hidden = false; $('poster').hidden = true; }
+    }
+    const d = video.duration || 8;
+    $('scrubFill').style.width = (100 * video.currentTime / d) + '%';
+    $('tNow').textContent = fmt(video.currentTime);
+    if (playing) requestAnimationFrame(frame);
+  }
+  // out null plays with nothing written yet; fromStart false carries on from where it was paused.
+  function play(out, fromStart = true) {
+    if (!ready) return;
+    uploadOut(out);
+    video.muted = false; if (fromStart) video.currentTime = 0;
+    const p = video.play(); if (p && p.catch) p.catch(() => { video.muted = true; video.play().catch(() => {}); });
+    if (!playing) { playing = true; requestAnimationFrame(frame); }
+    $('playBtn').hidden = true;
+  }
+  function pause() { video.pause(); $('playBtn').hidden = false; }
+  video.addEventListener('ended', () => {
+    playing = false; frame();
+    if (state === 'running') { state = 'idle'; digits = ''; $('playBtn').hidden = false; }   // ran out before any digits: start over
+  });
+
+  // ---- the secret keypad ----
+  let digits = '', state = 'idle';   // idle -> armed (two digits) -> played
+  const size0 = '4.' + String(10 + Math.floor(Math.random() * 80));
+  const stamp = () => '08:14 · ' + (cfg.peek && digits.length === 2 ? '4.' + digits : size0) + ' MB';
+  function keyAt(x, y) {
+    const row = Math.min(3, Math.floor(4 * y / innerHeight));
+    if (row === 3) return '0';
+    return String(row * 3 + Math.min(2, Math.floor(3 * x / innerWidth)) + 1);
+  }
+  function reset() {
+    digits = ''; state = 'idle'; playing = false;
+    video.pause(); try { video.currentTime = 0; } catch (e) {}
+    cv.hidden = true; $('poster').hidden = false; $('playBtn').hidden = false;
+    $('scrubFill').style.width = '0'; $('tNow').textContent = '0:00'; $('t2').textContent = stamp();
+  }
+  function onTap(x, y) {
+    if (cfg.entry === 'pause') {
+      // Play, pause, play: tap 1 plays (anywhere), tap 2 pauses and is the first digit, tap 3 is the second digit and plays on.
+      if (state === 'idle') { state = 'running'; play(null); }
+      else if (state === 'running') { pause(); digits = keyAt(x, y); state = 'paused'; }
+      else if (state === 'paused') {
+        digits += keyAt(x, y); state = 'played'; $('t2').textContent = stamp();
+        play(+digits, cfg.resume === 'start');
+      }
+      return;
+    }
+    // Digits first: two taps set the out, the next tap plays.
+    if (state === 'idle') {
+      digits += keyAt(x, y);
+      if (digits.length === 2) state = 'armed';
+      $('t2').textContent = stamp();
+    } else if (state === 'armed') {
+      state = 'played'; play(+digits);
+    }
+  }
+  // One handler for taps, swipes and the hold, reading the finger directly.
+  let sx = 0, sy = 0, st = 0, down = false, holdT = null;
+  const viewer = $('viewer');
+  viewer.addEventListener('pointerdown', e => {
+    if (state === 'place') return;
+    sx = e.clientX; sy = e.clientY; st = Date.now(); down = true;
+    clearTimeout(holdT); holdT = setTimeout(() => { down = false; openSheet(); }, 1500);
+  });
+  viewer.addEventListener('pointermove', e => { if (down && Math.hypot(e.clientX - sx, e.clientY - sy) > 12) clearTimeout(holdT); });
+  viewer.addEventListener('pointerup', e => {
+    clearTimeout(holdT);
+    if (!down) return; down = false;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { reset(); return; }
+    if (Math.hypot(dx, dy) < 12 && Date.now() - st < 700) onTap(sx, sy);
+  });
+  viewer.addEventListener('pointercancel', () => { clearTimeout(holdT); down = false; });
+  viewer.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ---- settings screen ----
+  function fillScenes() {
+    const sel = $('cfgScene'); sel.textContent = '';
+    const add = (id, name) => { const o = document.createElement('option'); o.value = id; o.textContent = name; sel.appendChild(o); };
+    Object.keys(SCENES).forEach(id => add(id, SCENES[id].name));
+    cfg.uploads.forEach(u => add(u.id, 'Mine: ' + u.name));
+    sel.value = cfg.scene;
+    $('delRow').hidden = !!SCENES[cfg.scene];
+  }
+  // One box per out, 01 to 99. Stored together as lines of text.
+  function buildOuts() {
+    const list = $('outsList'), lines = set().outs.split('\n'); list.textContent = '';
+    for (let i = 1; i <= 99; i++) {
+      const n = String(i).padStart(2, '0'), row = document.createElement('div'); row.className = 'out';
+      const lab = document.createElement('label'); lab.htmlFor = 'out' + n; lab.textContent = n;
+      const inp = document.createElement('input'); inp.type = 'text'; inp.id = 'out' + n; inp.value = lines[i - 1] || '';
+      inp.autocomplete = 'off'; inp.spellcheck = false; inp.placeholder = i + '';
+      const pb = document.createElement('button'); pb.className = 'btn pic'; pb.dataset.n = n;
+      const p = set().pics[n];
+      if (p) { inp.value = 'Picture: ' + p.name; inp.disabled = true; inp.dataset.text = lines[i - 1] || ''; pb.textContent = 'Remove'; }
+      else pb.textContent = 'Picture';
+      row.append(lab, inp, pb); list.appendChild(row);
+    }
+  }
+  // A box showing a picture keeps the words it had underneath, ready for when the picture is removed.
+  const readOuts = () => Array.from({ length: 99 }, (_, i) => { const el = $('out' + nn(i + 1)); return (el.disabled ? el.dataset.text : el.value).replace(/\n/g, ' '); }).join('\n').replace(/\n+$/, '');
+  let picFor = null;
+  $('outsList').addEventListener('click', async e => {
+    const b = e.target.closest('button.pic'); if (!b) return;
+    const k = b.dataset.n;
+    const pics = set().pics;
+    if (pics[k]) {   // remove
+      const key = pics[k].key || 'pic:' + k;
+      set().outs = readOuts(); delete pics[k]; delete picImgs[k]; save(); buildOuts();
+      if (!inUse(key)) idb('readwrite', st => st.delete(key)).catch(() => {});
+      return;
+    }
+    picFor = k; $('picFile').click();
+  });
+  $('picFile').addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file || !picFor) return;
+    const k = picFor; picFor = null;
+    try {
+      // Shrink big photos so they load quickly; PNG keeps any transparent background.
+      const img = await new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = URL.createObjectURL(file); });
+      const sc = Math.min(1, 1200 / Math.max(img.width, img.height)), pc = document.createElement('canvas');
+      pc.width = Math.round(img.width * sc); pc.height = Math.round(img.height * sc);
+      pc.getContext('2d').drawImage(img, 0, 0, pc.width, pc.height);
+      const blob = await new Promise(ok => pc.toBlob(ok, 'image/png'));
+      const key = 'pic:' + set().id + ':' + k + ':' + Date.now();
+      await idb('readwrite', st => st.put(blob, key));
+      set().outs = readOuts(); set().pics[k] = { name: file.name.replace(/\.[^.]+$/, '').slice(0, 30) || 'picture', key }; save();
+      loadPic(k); buildOuts();
+    } catch (err) { const el = $('out' + k); el.value = ''; el.placeholder = 'Couldn’t use that picture. Try a JPEG or PNG.'; }
+  });
+  $('outsList').addEventListener('input', () => { set().outs = readOuts(); save(); });
+  // A stored picture can be shared by copies of a set, so only delete it when no set uses it any more.
+  const inUse = key => cfg.sets.some(x => Object.entries(x.pics).some(([k, p]) => (p.key || 'pic:' + k) === key));
+  function fillSets() {
+    const sel = $('setSel'); sel.textContent = '';
+    cfg.sets.forEach(x => { const o = document.createElement('option'); o.value = x.id; o.textContent = x.name; sel.appendChild(o); });
+    sel.value = set().id; $('setName').value = set().name; $('setDel').disabled = cfg.sets.length < 2;
+  }
+  function useSet(id) {
+    cfg.set = id;
+    const before = cfg.scene; STYLE.forEach(k => { cfg[k] = set()[k]; }); save();
+    Object.keys(picImgs).forEach(k => delete picImgs[k]); Object.keys(set().pics).forEach(loadPic);
+    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; loadFont();
+    if (cfg.scene !== before) loadScene(); else scene = sceneOf(cfg.scene);
+    fillSets(); buildOuts();
+  }
+  const setMsg = t => { $('setMsg').textContent = t; $('setMsg').hidden = !t; clearTimeout(setMsg.t); setMsg.t = setTimeout(() => { $('setMsg').hidden = true; }, 6000); };
+  function addSet(name, outs, pics) {
+    set().outs = readOuts();
+    const id = 's' + Date.now(), cur = set(), copy = JSON.parse(JSON.stringify(cur));
+    cfg.sets.push(Object.assign(copy, { id, name, outs, pics })); useSet(id);
+    $('setName').focus(); $('setName').select();
+  }
+  $('setSel').addEventListener('change', () => { set().outs = readOuts(); useSet($('setSel').value); });
+  $('setName').addEventListener('input', () => { set().name = $('setName').value.trim() || 'Untitled'; save(); $('setSel').selectedOptions[0].textContent = set().name; });
+  $('setCopy').addEventListener('click', () => { addSet('Copy of ' + set().name, readOuts(), JSON.parse(JSON.stringify(set().pics))); setMsg('Copied. Give it a name, then change whatever you like.'); });
+  $('setNew').addEventListener('click', () => { addSet('New effect', '', {}); setMsg('New effect with empty outs, using the current video and look. Name it, then fill in the outs below.'); });
+  let setDelArmed = null;
+  $('setDel').addEventListener('click', () => {
+    if (cfg.sets.length < 2) return;
+    if (!setDelArmed) { $('setDel').textContent = 'Tap again to delete'; setDelArmed = setTimeout(() => { setDelArmed = null; $('setDel').textContent = 'Delete effect'; }, 3000); return; }
+    clearTimeout(setDelArmed); setDelArmed = null; $('setDel').textContent = 'Delete effect';
+    const gone = set(); cfg.sets = cfg.sets.filter(x => x !== gone);
+    Object.entries(gone.pics).forEach(([k, p]) => { const key = p.key || 'pic:' + k; if (!p.src && !inUse(key)) idb('readwrite', st => st.delete(key)).catch(() => {}); });
+    useSet(cfg.sets[0].id);
+  });
+  function openSheet() {
+    fillScenes(); $('cfgFont').value = cfg.font; $('cfgInk').value = cfg.ink; $('cfgRed').checked = cfg.red; $('cfgPeek').checked = cfg.peek; $('cfgEntry').value = cfg.entry; $('cfgResume').value = cfg.resume;
+    fillSets(); buildOuts();
+    $('sheet').hidden = false;
+  }
+  function readSheet() {
+    const sceneChanged = cfg.scene !== $('cfgScene').value;
+    cfg.scene = $('cfgScene').value; cfg.font = $('cfgFont').value; loadFont(); cfg.ink = $('cfgInk').value; cfg.red = $('cfgRed').checked; cfg.peek = $('cfgPeek').checked; cfg.entry = $('cfgEntry').value; cfg.resume = $('cfgResume').value;
+    STYLE.forEach(k => { set()[k] = cfg[k]; });
+    set().outs = readOuts(); save();
+    if (sceneChanged) { loadScene(); $('delRow').hidden = !!SCENES[cfg.scene]; }
+  }
+  ['cfgScene', 'cfgFont', 'cfgInk', 'cfgRed', 'cfgPeek', 'cfgEntry', 'cfgResume'].forEach(id => $(id).addEventListener('change', readSheet));
+  $('cardsBtn').addEventListener('click', () => {
+    for (let i = 0; i < 52; i++) { const el = $('out' + nn(i + 1)); if (el.disabled) el.dataset.text = CARDS[i]; else el.value = CARDS[i]; }
+    readSheet();
+  });
+  $('tryBtn').addEventListener('click', () => {
+    const n = parseInt($('tryNum').value, 10);
+    if (isNaN(n) || n < 0 || n > 99) { $('tryNum').focus(); return; }
+    $('sheet').hidden = true; reset(); digits = String(n).padStart(2, '0'); state = 'played'; play(n);
+  });
+
+  // ---- adding your own video ----
+  const note = t => { $('upNote').textContent = t; $('upNote').hidden = !t; };
+  $('upFile').addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    note('Adding ' + file.name + '…');
+    try {
+      // Read its size and grab a still from the start to show before it plays.
+      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.setAttribute('playsinline', '');
+      const u = URL.createObjectURL(file); v.src = u;
+      await new Promise((ok, bad) => { v.onloadedmetadata = ok; v.onerror = () => bad(new Error('unreadable')); });
+      await v.play().catch(() => {}); v.pause();
+      await new Promise(ok => { v.onseeked = ok; v.currentTime = 0.05; setTimeout(ok, 1500); });
+      const w = v.videoWidth, h = v.videoHeight;
+      if (!w || !h) throw new Error('unreadable');
+      const pc = document.createElement('canvas'), k = Math.min(1, 720 / w);
+      pc.width = Math.round(w * k); pc.height = Math.round(h * k);
+      pc.getContext('2d').drawImage(v, 0, 0, pc.width, pc.height);
+      const poster = await new Promise(ok => pc.toBlob(ok, 'image/jpeg', 0.85));
+      URL.revokeObjectURL(u);
+      const id = 'u' + Date.now(), name = file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'My video';
+      await idb('readwrite', st => st.put({ video: file, poster }, id));
+      cfg.uploads.push({ id, name, w, h }); cfg.scene = set().scene = id; save();
+      note(''); await loadScene(); fillScenes();
+      openPlace();   // straight on to placing the writing
+    } catch (err) {
+      note(err.message === 'unreadable' ? 'This phone can’t read that video. Try one recorded on this phone, as MP4 or MOV.' : 'Couldn’t store the video. The phone may be short of space.');
+    }
+  });
+  let delArmed = null;
+  $('delBtn').addEventListener('click', async () => {
+    if (!delArmed) { $('delBtn').textContent = 'Tap again to delete'; delArmed = setTimeout(() => { delArmed = null; $('delBtn').textContent = 'Delete'; }, 3000); return; }
+    clearTimeout(delArmed); delArmed = null; $('delBtn').textContent = 'Delete';
+    const id = scene.id;
+    try { await idb('readwrite', st => st.delete(id)); } catch (e) {}
+    cfg.uploads = cfg.uploads.filter(u => u.id !== id); delete cfg.scenes[id]; cfg.scene = 'cloth';
+    cfg.sets.forEach(x => { if (x.scene === id) x.scene = 'cloth'; delete x.place[id]; }); save();
+    await loadScene(); fillScenes();
+  });
+
+  // ---- placing the writing: drag the corners on a frame of the video ----
+  // Writing and pictures each have their own size and position; the same sliders adjust whichever is chosen.
+  const sign = v => (v > 0 ? '+' : '') + v;
+  const ADJ = [['adjSize', 'tsize', 'psize', 100, v => v + '%'], ['adjX', 'tx', 'px', 100, sign], ['adjY', 'ty', 'py', -100, sign], ['adjRot', null, 'prot', 1, v => sign(v) + '°'], ['adjOp', 'op', 'op', 100, v => v + '%']];
+  let adjOut = 12, adjMode = 'text';
+  const keyFor = a => adjMode === 'pic' ? a[2] : a[1];
+  const firstPic = () => Object.keys(set().pics).sort().find(k => picImgs[k] && !isDrawing(k));
+  function previewOut() {
+    const isPic = n => !!(set().pics[nn(n)] && picImgs[nn(n)] && !isDrawing(nn(n)));
+    if (adjMode === 'pic') return isPic(adjOut) ? adjOut : (firstPic() ? +firstPic() : null);
+    return isPic(adjOut) ? 12 : adjOut;
+  }
+  // The picture fills the screen and is cropped to fit, as in playback; convert between screen and video pixels.
+  function fit() { const k = Math.max(innerWidth / scene.w, innerHeight / scene.h); return { k, ox: (innerWidth - scene.w * k) / 2, oy: (innerHeight - scene.h * k) / 2 }; }
+  const toScreen = ([x, y]) => { const f = fit(); return [f.ox + x * f.k, f.oy + y * f.k]; };
+  const toVideo = (x, y) => { const f = fit(); return [Math.min(scene.w, Math.max(0, (x - f.ox) / f.k)), Math.min(scene.h, Math.max(0, (y - f.oy) / f.k))]; };
+  function setOwn(patch) {   // size, position, tilt and opacity go to the effect; the rest to the video
+    Object.entries(patch).forEach(([k, v]) => { (EFFECT_PLACE.includes(k) ? scene.eff : scene.own)[k] = v; });
+    Object.assign(scene, patch); save();
+  }
+  function drawHandles() {
+    const pts = scene.quad.map(toScreen);
+    document.querySelectorAll('.h.corner').forEach((el, i) => { el.style.left = pts[i][0] + 'px'; el.style.top = pts[i][1] + 'px'; });
+    const c = apply(homography(UNIT, scene.quad), 0.5, 0.5), cs = toScreen(c);
+    const mv = document.querySelector('.h.mover'); mv.style.left = cs[0] + 'px'; mv.style.top = cs[1] + 'px';
+    $('quadPoly').setAttribute('points', pts.map(p => p.join(',')).join(' '));
+  }
+  function placeDraw() {
+    ADJ.forEach(a => { const key = keyFor(a); if (!key) return; $(a[0]).value = Math.round(scene[key] * a[3]); $(a[0] + 'V').textContent = a[4](+$(a[0]).value); });
+    document.querySelectorAll('#adjMode button').forEach(b => b.classList.toggle('on', b.dataset.m === adjMode));
+    const out = previewOut();
+    $('rotRow').hidden = adjMode !== 'pic'; $('picNote').hidden = !(adjMode === 'pic' && out === null);
+    $('adjMask').checked = scene.mask;
+    $('adjFromV').textContent = scene.from > 0 ? 'Writing shows from ' + scene.from.toFixed(1) + ' s' : 'Writing shows from the start';
+    $('adjFrom').textContent = scene.from > 0 ? 'Show from the start' : 'Show from this frame';
+    setScene(); uploadOut(out); frame(); drawHandles();
+  }
+  function openPlace(mode) {
+    readSheet();
+    const n = parseInt($('tryNum').value, 10);
+    adjOut = isNaN(n) || n < 1 || n > 99 ? 12 : n; adjMode = mode || (set().pics[nn(adjOut)] && !isDrawing(nn(adjOut)) ? 'pic' : 'text');
+    $('sheet').hidden = true; reset(); state = 'place'; $('playBtn').hidden = true;
+    $('adjust').hidden = false; $('handles').hidden = false; $('adjBody').hidden = false; $('adjFold').textContent = 'Hide controls';
+    // Phones only decode frames once a video has played, so start it silently, stop, and go to the last frame.
+    const toEnd = () => { video.muted = true; const p = video.play(); Promise.resolve(p).catch(() => {}).then(() => { video.pause(); seekTo(Math.max(0, video.duration - 0.05)); }); };
+    if (video.readyState >= 1) toEnd(); else video.addEventListener('loadedmetadata', toEnd, { once: true });
+    placeDraw();
+  }
+  function seekTo(t) {
+    video.addEventListener('seeked', () => { frame(); }, { once: true });
+    video.currentTime = t;
+    $('adjTime').value = Math.round(1000 * t / (video.duration || 1)); $('adjTimeV').textContent = t.toFixed(1) + ' s';
+  }
+  $('adjTime').addEventListener('input', () => seekTo(($('adjTime').value / 1000) * (video.duration || 0)));
+  ADJ.forEach(a => $(a[0]).addEventListener('input', () => { const key = keyFor(a); if (key) { setOwn({ [key]: +$(a[0]).value / a[3] }); placeDraw(); } }));
+  $('adjMode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { adjMode = b.dataset.m; placeDraw(); } });
+  // Masking compares each pixel with the surface itself, so measure the surface on the frame showing now.
+  function measureSurface() {
+    const pc = document.createElement('canvas'), k = Math.min(1, 320 / scene.w);
+    pc.width = Math.round(scene.w * k); pc.height = Math.round(scene.h * k);
+    const c = pc.getContext('2d'); c.drawImage(video, 0, 0, pc.width, pc.height);
+    const d = c.getImageData(0, 0, pc.width, pc.height).data, hq = homography(UNIT, scene.quad);
+    let L = 0, S = 0, n = 0;
+    for (let u = 0.2; u <= 0.8; u += 0.05) for (let v = 0.2; v <= 0.8; v += 0.05) {
+      const [x, y] = apply(hq, u, v), i = (Math.round(y * k) * pc.width + Math.round(x * k)) * 4;
+      if (i < 0 || i >= d.length) continue;
+      const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+      L += 0.299 * r + 0.587 * g + 0.114 * b; S += Math.max(r, g, b) - Math.min(r, g, b); n++;
+    }
+    return n ? [L / n, S / n] : [0.82, 0.03];
+  }
+  $('adjMask').addEventListener('change', () => {
+    const on = $('adjMask').checked;
+    setOwn(on ? { mask: true, ref: measureSurface() } : { mask: false }); placeDraw();
+  });
+  $('adjFrom').addEventListener('click', () => { setOwn({ from: scene.from > 0 ? 0 : Math.max(0.01, video.currentTime) }); placeDraw(); });
+  $('adjFold').addEventListener('click', () => { const h = !$('adjBody').hidden; $('adjBody').hidden = h; $('adjFold').textContent = h ? 'Show controls' : 'Hide controls'; drawHandles(); });
+  $('adjReset').addEventListener('click', () => {
+    const b = SCENES[scene.id], q = b ? b.quad : defaultQuad(scene.w, scene.h);
+    setOwn(Object.assign({ quad: q.map(p => p.slice()), mask: !!b, ref: [0.82, 0.03] }, PLACE)); placeDraw();
+  });
+  $('adjDone').addEventListener('click', () => { $('adjust').hidden = true; $('handles').hidden = true; reset(); openSheet(); });
+  $('adjBtn').addEventListener('click', () => openPlace());
+  $('placeText').addEventListener('click', () => openPlace('text'));
+  $('placePic').addEventListener('click', () => openPlace('pic'));
+  // Dragging a corner moves that corner; dragging ✥ moves the whole area.
+  let drag = null;
+  $('handles').addEventListener('pointerdown', e => {
+    const h = e.target.closest('.h'); if (!h) return;
+    e.preventDefault(); try { h.setPointerCapture(e.pointerId); } catch (er) {}
+    drag = { i: h.dataset.i, start: toVideo(e.clientX, e.clientY), quad: scene.quad.map(p => p.slice()) };
+  });
+  $('handles').addEventListener('pointermove', e => {
+    if (!drag) return;
+    const p = toVideo(e.clientX, e.clientY), q = drag.quad.map(v => v.slice());
+    if (drag.i === 'move') { const dx = p[0] - drag.start[0], dy = p[1] - drag.start[1]; q.forEach(v => { v[0] += dx; v[1] += dy; }); }
+    else q[+drag.i] = p;
+    scene.quad = q; setScene(); uploadOut(previewOut()); frame(); drawHandles();
+  });
+  const endDrag = () => { if (drag) { setOwn({ quad: scene.quad }); drag = null; } };
+  $('handles').addEventListener('pointerup', endDrag); $('handles').addEventListener('pointercancel', endDrag);
+  window.addEventListener('resize', () => { if (state === 'place') drawHandles(); });
+
+  $('close').addEventListener('click', () => { readSheet(); $('sheet').hidden = true; reset(); });
+
+  // ---- start ----
+  if (!gl) { $('loading').textContent = 'This phone can’t show the video effect.'; return; }
+  initGL(); fillScenes(); loadScene(); reset();
+  Object.keys(set().pics).forEach(loadPic);
+  // Draw the writing once the marker font has arrived, so the first play never falls back to a plain font.
+  function loadFont() { if (document.fonts && document.fonts.load) document.fonts.load(fontOf(40)).catch(() => {}); }
+  loadFont();
+  function wake() { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {} }
+  wake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
