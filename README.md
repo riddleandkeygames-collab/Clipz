@@ -36,6 +36,6 @@ The app has to be served over HTTPS for phones to install it. GitHub Pages does 
 
 - `index.html`: the whole app
 - `sw.js`, `manifest.webmanifest`, `icon-*.png`: installing and working offline
-- `cloth.mp4`, `towel.mp4`, `board.mp4`, `station.mp4`, `cardm.mp4`, `cardf.mp4` and their `.jpg` stills: the built-in videos (`*-track.json` holds the tracked corners for the moving ones)
+- `cloth.mp4`, `towel.mp4`, `board.mp4`, `station.mp4`, `cardm.mp4`, `cardf.mp4`, `shelf.mp4` and their `.jpg` stills: the built-in videos (`*-track.json` holds the tracked corners for the moving ones)
 - `card-7h.png`, `sym/`, `doodle/`: the built-in pictures, symbols and doodles
 - `faces/01.jpg` to `faces/53.jpg`: the card faces for the card-in-hand videos (Clubs, Hearts, Spades, Diamonds, Ace to King, then the Joker). They are Adrian Kennard's playing card designs (www.me.uk/cards), released into the public domain (CC0), taken from the @letele/playing-cards package.
