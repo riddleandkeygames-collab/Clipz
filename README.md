@@ -26,7 +26,7 @@ The app has to be served over HTTPS for phones to install it. GitHub Pages does 
 
 ## Using it
 
-- Hold anywhere on the video for 1.5 seconds to open the magician settings. Everything is explained there.
+- Swipe down on the video to open the magician settings. Everything is explained there. Swipe up takes back the last tap.
 - The secret keypad is the whole screen in four rows: 1 2 3 / 4 5 6 / 7 8 9 / 0.
 - Play, pause, play: tap to play, tap to pause (where you tap is the first digit), tap to play again (where you tap is the second digit).
 - Effects, outs, pictures and your own videos are saved on each phone separately.
