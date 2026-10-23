@@ -30,6 +30,7 @@ The app has to be served over HTTPS for phones to install it. GitHub Pages does 
 - The secret keypad is the whole screen in four rows: 1 2 3 / 4 5 6 / 7 8 9 / 0.
 - Play, pause, play: tap to play, tap to pause (where you tap is the first digit), tap to play again (where you tap is the second digit).
 - Effects, outs, pictures and your own videos are saved on each phone separately.
+- A blank playing card in your own video can become the chosen card: add the video, open Placement, tick **Whole card face**, go to a frame where the card is clear and tap **Find the card**. Film it with the phone on a stand and nothing in front of the card at the end.
 
 ## Files
 
