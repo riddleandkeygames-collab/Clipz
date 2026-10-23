@@ -27,7 +27,7 @@ The app has to be served over HTTPS for phones to install it. GitHub Pages does 
 ## Using it
 
 - Swipe down on the video to open the magician settings. Everything is explained there. Swipe up takes back the last tap.
-- The secret keypad is the whole screen in four rows: 1 2 3 / 4 5 6 / 7 8 9 / 0.
+- Settings show how to perform the effect you have chosen: the secret input, the taps, and an example.
 - Play, pause, play: tap to play, tap to pause (where you tap is the first digit), tap to play again (where you tap is the second digit).
 - Effects, outs, pictures and your own videos are saved on each phone separately.
 - A blank playing card in your own video can become the chosen card: add the video, open Placement, tick **Whole card face**, go to a frame where the card is clear and tap **Find the card**. Film it with the phone on a stand and nothing in front of the card at the end.
